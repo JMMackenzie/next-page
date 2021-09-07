@@ -44,7 +44,31 @@ struct topk_queue {
         return true;
     }
 
-    bool would_enter(float score) const { return score >= m_threshold; }
+    //NEXTPAGE: This insert will set the ejected score and document identifier
+    bool insert(float score, uint64_t docid, float& ejected_score, uint64_t& ejected_docid)
+    {
+        if (PISA_UNLIKELY(not would_enter(score))) {
+            return false;
+        }
+        m_q.emplace_back(score, docid);
+        if (PISA_UNLIKELY(m_q.size() <= m_k)) {
+            std::push_heap(m_q.begin(), m_q.end(), min_heap_order);
+            if (PISA_UNLIKELY(m_q.size() == m_k)) {
+                m_threshold = m_q.front().first;
+            }
+        } else {
+            std::pop_heap(m_q.begin(), m_q.end(), min_heap_order);
+            auto ejected = m_q.back();
+            ejected_score = ejected.first;
+            ejected_docid = ejected.second;
+            m_q.pop_back();
+            m_threshold = m_q.front().first;
+        }
+        return true;
+    }
+
+
+    bool would_enter(float score) const { return score > m_threshold; }
 
     void finalize()
     {
