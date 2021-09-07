@@ -36,6 +36,9 @@ class BlockMaxScoredCursor: public MaxScoredCursor<Cursor> {
     }
     PISA_ALWAYSINLINE void block_max_next_geq(std::uint32_t docid) { m_wdata.next_geq(docid); }
 
+    //NEXTPAGE: Resets the wdata enumerator 
+    PISA_ALWAYSINLINE void block_max_reset() { m_wdata.reset(); }
+
   private:
     typename Wand::wand_data_enumerator m_wdata;
 };

@@ -182,6 +182,17 @@ class bit_vector_builder {
         std::swap(m_cur_word, other.m_cur_word);
     }
 
+    //NEXTPAGE: Add the [] operator so we can interrogate bits inside the bv
+    inline bool operator[](uint64_t pos) const 
+    {
+        assert(pos < m_size);
+        uint64_t block = pos / 64;
+        assert(block < m_bits.size());
+        uint64_t shift - post % 64;
+        return ((m_bits[block] >> shift) & 1) != 0U;
+    }
+
+
   private:
     bits_type m_bits;
     uint64_t m_size;

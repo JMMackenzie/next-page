@@ -114,6 +114,11 @@ class wand_data_raw {
 
         uint64_t PISA_FLATTEN_FUNC find_next_skip() { return m_block_docid[cur_pos + block_start]; }
 
+        void PISA_NOINLINE reset()
+        {
+            cur_pos = 0;
+        }
+
       private:
         uint64_t cur_pos;
         uint64_t block_start;
