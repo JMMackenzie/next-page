@@ -75,21 +75,12 @@ struct block_max_wand_query {
                 // check if pivot is a possible match
                 if (pivot_id == ordered_cursors[0]->docid()) {
                     float score = 0;
+                    //NEXTPAGE: Removed partial scoring here
                     for (Cursor* en: ordered_cursors) {
                         if (en->docid() != pivot_id) {
                             break;
                         }
-                        float part_score = en->score();
-                        score += part_score;
-                        block_upper_bound -= en->block_max_score() * en->query_weight() - part_score;
-                        if (!m_topk.would_enter(block_upper_bound)) {
-                            break;
-                        }
-                    }
-                    for (Cursor* en: ordered_cursors) {
-                        if (en->docid() != pivot_id) {
-                            break;
-                        }
+                        score += en->score();
                         en->next();
                     }
 
