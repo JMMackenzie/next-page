@@ -188,7 +188,7 @@ class bit_vector_builder {
         assert(pos < m_size);
         uint64_t block = pos / 64;
         assert(block < m_bits.size());
-        uint64_t shift - post % 64;
+        uint64_t shift = pos % 64;
         return ((m_bits[block] >> shift) & 1) != 0U;
     }
 

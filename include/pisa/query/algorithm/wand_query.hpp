@@ -356,7 +356,7 @@ struct wand_query {
         size_t lower_bound = m_cyclic.displaced_id(m_secondary.threshold());
         
         // Reset cursors on the lower bound
-        for (auto &en : ordered_cursors {
+        for (auto &en : ordered_cursors) {
             en->reset();
             en->next_geq(lower_bound);
         }
@@ -437,7 +437,7 @@ struct wand_query {
 
     std::vector<std::pair<float, uint64_t>> const& topk() const { return m_topk.topk(); }
 
-    std::vector<std::pair<float, uint64_t>> const& secondary_topk() const { return m_secondary_topk.topk(); }
+    std::vector<std::pair<float, uint64_t>> const& secondary_topk() const { return m_secondary.topk(); }
 
     std::vector<std::pair<float, uint64_t>> const& cyclic() const { return m_cyclic.topk(); }
 

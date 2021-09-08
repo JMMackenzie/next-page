@@ -63,7 +63,7 @@ void op_perftest(
     std::string const& index_type,
     std::string const& query_type,
     size_t runs,
-    std::uint64_t k,
+    uint64_t k,
     bool safe)
 {
     std::vector<double> query_times;
@@ -123,6 +123,7 @@ void perftest(
     std::string const& type,
     std::string const& query_type,
     uint64_t k,
+    uint64_t secondary_k,
     const ScorerParams& scorer_params,
     bool extract,
     bool safe)
@@ -192,19 +193,98 @@ void perftest(
             query_fun = [&](Query query, Threshold t) {
                 topk_queue topk(k);
                 topk.set_threshold(t);
-                wand_query wand_q(topk);
+                topk_queue secondary(0);
+                cyclic_queue cyclic(0);
+                wand_query wand_q(topk, secondary, cyclic);
                 wand_q(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
                 topk.finalize();
+                return topk.topk().size();
+            };
+        } else if (t == "wand_method_1" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                wand_query wand_q(topk, secondary, cyclic);
+                wand_q.method_one(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                cyclic.finalize(); // Method 1 uses cyclic to hold results
+                return topk.topk().size();
+            };
+        } else if (t == "wand_method_2" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                wand_query wand_q(topk, secondary, cyclic);
+                wand_q.method_two(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                secondary.finalize(); // Method 2 uses secondary to hold results
+                return topk.topk().size();
+            };
+        } else if (t == "wand_method_2" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                wand_query wand_q(topk, secondary, cyclic);
+                wand_q.method_three(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                secondary.finalize(); // Method 3 uses secondary to hold results
                 return topk.topk().size();
             };
         } else if (t == "block_max_wand" && wand_data_filename) {
             query_fun = [&](Query query, Threshold t) {
                 topk_queue topk(k);
                 topk.set_threshold(t);
-                block_max_wand_query block_max_wand_q(topk);
+                topk_queue secondary(0);
+                cyclic_queue cyclic(0);
+                block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
                 block_max_wand_q(
                     make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
                 topk.finalize();
+                return topk.topk().size();
+            };
+        } else if (t == "block_max_wand_method_1" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+                block_max_wand_q.method_one(
+                    make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                cyclic.finalize(); // Method 1 uses cyclic to hold results
+                return topk.topk().size();
+            };
+         } else if (t == "block_max_wand_method_2" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+                block_max_wand_q.method_two(
+                    make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                secondary.finalize(); // Method 2 uses secondary to hold results
+                return topk.topk().size();
+            };
+         } else if (t == "block_max_wand_method_3" && wand_data_filename) {
+            query_fun = [&](Query query, Threshold t) {
+                topk_queue topk(k);
+                topk.set_threshold(t);
+                topk_queue secondary(secondary_k);
+                cyclic_queue cyclic(secondary_k);
+                block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+                block_max_wand_q.method_three(
+                    make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+                topk.finalize();
+                secondary.finalize(); // Method 3 uses secondary to hold results
                 return topk.topk().size();
             };
         } else if (t == "block_max_maxscore" && wand_data_filename) {
@@ -298,6 +378,7 @@ int main(int argc, const char** argv)
     bool silent = false;
     bool safe = false;
     bool quantized = false;
+    uint64_t secondary_k = 0;
 
     App<arg::Index,
         arg::WandData<arg::WandMode::Optional>,
@@ -311,6 +392,7 @@ int main(int argc, const char** argv)
     app.add_flag("--silent", silent, "Suppress logging");
     app.add_flag("--safe", safe, "Rerun if not enough results with pruning.")
         ->needs(app.thresholds_option());
+    app.add_option("--secondary-k", secondary_k, "Size of secondary heap/queue.")->required();
     CLI11_PARSE(app, argc, argv);
 
     if (silent) {
@@ -330,6 +412,7 @@ int main(int argc, const char** argv)
         app.index_encoding(),
         app.algorithm(),
         app.k(),
+        secondary_k,
         app.scorer_params(),
         extract,
         safe);

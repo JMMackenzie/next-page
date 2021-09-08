@@ -39,6 +39,7 @@ void evaluate_queries(
     std::string const& type,
     std::string const& query_type,
     uint64_t k,
+    uint64_t secondary_k,
     std::string const& documents_filename,
     ScorerParams const& scorer_params,
     std::string const& run_id,
@@ -48,84 +49,99 @@ void evaluate_queries(
     WandType const wdata(MemorySource::mapped_file(wand_data_filename));
 
     auto scorer = scorer::from_params(scorer_params, wdata);
-    std::function<std::vector<std::pair<float, uint64_t>>(Query)> query_fun;
+    std::function<std::tuple<
+        std::vector<std::pair<float, uint64_t>>,
+        std::vector<std::pair<float, uint64_t>>>(Query)> query_fun;
 
     if (query_type == "wand") {
         query_fun = [&](Query query) {
             topk_queue topk(k);
-            wand_query wand_q(topk);
+            topk_queue secondary(0);
+            cyclic_queue cyclic(0);
+            wand_query wand_q(topk, secondary, cyclic);
             wand_q(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
             topk.finalize();
-            return topk.topk();
+            return std::make_tuple(topk.topk(), secondary.topk());
+        };
+    } else if (query_type == "wand_method_1") {
+        query_fun = [&](Query query) {
+            topk_queue topk(k);
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            wand_query wand_q(topk, secondary, cyclic);
+            wand_q.method_one(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+            topk.finalize();
+            cyclic.finalize();
+            return std::make_tuple(topk.topk(), cyclic.topk());
+        };
+    } else if (query_type == "wand_method_2") {
+        query_fun = [&](Query query) {
+            topk_queue topk(k);
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            wand_query wand_q(topk, secondary, cyclic);
+            wand_q.method_two(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+            topk.finalize();
+            secondary.finalize();
+            return std::make_tuple(topk.topk(), secondary.topk());
+        };
+     } else if (query_type == "wand_method_3") {
+        query_fun = [&](Query query) {
+            topk_queue topk(k);
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            wand_query wand_q(topk, secondary, cyclic);
+            wand_q.method_three(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
+            topk.finalize();
+            secondary.finalize();
+            return std::make_tuple(topk.topk(), secondary.topk());
         };
     } else if (query_type == "block_max_wand") {
         query_fun = [&](Query query) {
             topk_queue topk(k);
-            block_max_wand_query block_max_wand_q(topk);
+            topk_queue secondary(0);
+            cyclic_queue cyclic(0);
+            block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
             block_max_wand_q(
                 make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
             topk.finalize();
-            return topk.topk();
+            return std::make_tuple(topk.topk(), secondary.topk());
         };
-    } else if (query_type == "block_max_maxscore") {
+    } else if (query_type == "block_max_wand_method_1") {
         query_fun = [&](Query query) {
             topk_queue topk(k);
-            block_max_maxscore_query block_max_maxscore_q(topk);
-            block_max_maxscore_q(
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+            block_max_wand_q.method_one(
                 make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
             topk.finalize();
-            return topk.topk();
+            cyclic.finalize();
+            return std::make_tuple(topk.topk(), cyclic.topk());
         };
-    } else if (query_type == "block_max_ranked_and") {
+     } else if (query_type == "block_max_wand_method_2") {
         query_fun = [&](Query query) {
             topk_queue topk(k);
-            block_max_ranked_and_query block_max_ranked_and_q(topk);
-            block_max_ranked_and_q(
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+            block_max_wand_q.method_two(
                 make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
             topk.finalize();
-            return topk.topk();
+            secondary.finalize();
+            return std::make_tuple(topk.topk(), secondary.topk());
         };
-    } else if (query_type == "ranked_and") {
+      } else if (query_type == "block_max_wand_method_3") {
         query_fun = [&](Query query) {
             topk_queue topk(k);
-            ranked_and_query ranked_and_q(topk);
-            ranked_and_q(make_scored_cursors(index, *scorer, query), index.num_docs());
+            topk_queue secondary(secondary_k);
+            cyclic_queue cyclic(secondary_k);
+            block_max_wand_query block_max_wand_q(topk, secondary, cyclic);
+            block_max_wand_q.method_three(
+                make_block_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
             topk.finalize();
-            return topk.topk();
-        };
-    } else if (query_type == "ranked_or") {
-        query_fun = [&](Query query) {
-            topk_queue topk(k);
-            ranked_or_query ranked_or_q(topk);
-            ranked_or_q(make_scored_cursors(index, *scorer, query), index.num_docs());
-            topk.finalize();
-            return topk.topk();
-        };
-    } else if (query_type == "maxscore") {
-        query_fun = [&](Query query) {
-            topk_queue topk(k);
-            maxscore_query maxscore_q(topk);
-            maxscore_q(make_max_scored_cursors(index, wdata, *scorer, query), index.num_docs());
-            topk.finalize();
-            return topk.topk();
-        };
-    } else if (query_type == "ranked_or_taat") {
-        query_fun = [&, accumulator = Simple_Accumulator(index.num_docs())](Query query) mutable {
-            topk_queue topk(k);
-            ranked_or_taat_query ranked_or_taat_q(topk);
-            ranked_or_taat_q(
-                make_scored_cursors(index, *scorer, query), index.num_docs(), accumulator);
-            topk.finalize();
-            return topk.topk();
-        };
-    } else if (query_type == "ranked_or_taat_lazy") {
-        query_fun = [&, accumulator = Lazy_Accumulator<4>(index.num_docs())](Query query) mutable {
-            topk_queue topk(k);
-            ranked_or_taat_query ranked_or_taat_q(topk);
-            ranked_or_taat_q(
-                make_scored_cursors(index, *scorer, query), index.num_docs(), accumulator);
-            topk.finalize();
-            return topk.topk();
+            secondary.finalize();
+            return std::make_tuple(topk.topk(), secondary.topk());
         };
     } else {
         spdlog::error("Unsupported query type: {}", query_type);
@@ -135,16 +151,13 @@ void evaluate_queries(
     auto docmap = Payload_Vector<>::from(*source);
 
     std::vector<std::vector<std::pair<float, uint64_t>>> raw_results(queries.size());
-    auto start_batch = std::chrono::steady_clock::now();
-    tbb::parallel_for(size_t(0), queries.size(), [&, query_fun](size_t query_idx) {
-        raw_results[query_idx] = query_fun(queries[query_idx]);
-    });
-    auto end_batch = std::chrono::steady_clock::now();
 
-    for (size_t query_idx = 0; query_idx < raw_results.size(); ++query_idx) {
-        auto results = raw_results[query_idx];
+    for (size_t query_idx = 0; query_idx < queries.size(); ++query_idx) {
+
+        auto results = query_fun(queries[query_idx]);
         auto qid = queries[query_idx].id;
-        for (auto&& [rank, result]: enumerate(results)) {
+        size_t res_count = 0;
+        for (auto&& [rank, result]: enumerate(std::get<0>(results))) {
             std::cout << fmt::format(
                 "{}\t{}\t{}\t{}\t{}\t{}\n",
                 qid.value_or(std::to_string(query_idx)),
@@ -153,15 +166,20 @@ void evaluate_queries(
                 rank,
                 result.first,
                 run_id);
+            ++res_count;
+        }
+        for (auto && [rank, result]: enumerate(std::get<1>(results))) {
+            std::cout << fmt::format(
+                "{}\t{}\t{}\t{}\t{}\t{}\n",
+                qid.value_or(std::to_string(query_idx)),
+                iteration,
+                docmap[result.second],
+                rank + res_count,
+                result.first,
+                run_id);
+ 
         }
     }
-    auto end_print = std::chrono::steady_clock::now();
-    double batch_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end_batch - start_batch).count();
-    double batch_with_print_ms =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end_print - start_batch).count();
-    spdlog::info("Time taken to process queries: {}ms", batch_ms);
-    spdlog::info("Time taken to process queries with printing: {}ms", batch_with_print_ms);
 }
 
 using wand_raw_index = wand_data<wand_data_raw>;
@@ -175,6 +193,7 @@ int main(int argc, const char** argv)
     std::string documents_file;
     std::string run_id = "R0";
     bool quantized = false;
+    uint64_t secondary_k = 0;
 
     App<arg::Index,
         arg::WandData<arg::WandMode::Required>,
@@ -187,7 +206,8 @@ int main(int argc, const char** argv)
     app.add_option("-r,--run", run_id, "Run identifier");
     app.add_option("--documents", documents_file, "Document lexicon")->required();
     app.add_flag("--quantized", quantized, "Quantized scores");
-
+    app.add_option("--secondary-k", secondary_k, "Size of secondary heap/queue.")->required();
+ 
     CLI11_PARSE(app, argc, argv);
 
     tbb::global_control control(tbb::global_control::max_allowed_parallelism, app.threads() + 1);
@@ -207,6 +227,7 @@ int main(int argc, const char** argv)
         app.index_encoding(),
         app.algorithm(),
         app.k(),
+        secondary_k,
         documents_file,
         app.scorer_params(),
         run_id,

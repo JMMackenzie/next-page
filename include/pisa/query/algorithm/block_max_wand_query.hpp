@@ -611,7 +611,7 @@ struct block_max_wand_query {
         size_t lower_bound = m_cyclic.displaced_id(m_secondary.threshold());
         
         // Reset cursors on the lower bound
-        for (auto &en : ordered_cursors {
+        for (auto &en : ordered_cursors) {
             en->reset();
             en->block_max_reset();
             en->next_geq(lower_bound);
@@ -686,7 +686,7 @@ struct block_max_wand_query {
                         score += en->score();
                         en->next();
                     }
-                    m_secondary_topk.insert(score, pivot_id);
+                    m_secondary.insert(score, pivot_id);
                     // resort by docid
                     sort_cursors();
 
@@ -755,7 +755,7 @@ struct block_max_wand_query {
  
     std::vector<std::pair<float, uint64_t>> const& topk() const { return m_topk.topk(); }
 
-    std::vector<std::pair<float, uint64_t>> const& secondary_topk() const { return m_secondary_topk.topk(); }
+    std::vector<std::pair<float, uint64_t>> const& secondary_topk() const { return m_secondary.topk(); }
     
     void clear_topk() { m_topk.clear(); }
 
