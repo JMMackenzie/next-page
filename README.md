@@ -9,7 +9,7 @@ If you use our efficient next-page extensions to PISA in your own research, you 
   author = {J. Mackenzie and M. Petri and A. Moffat},
   title = {Efficient Query Processing Techniques for Next-Page Retrieval},
   journal = "Information Retrieval",
-  year = {2021},
+  year = {2022},
   volume = {},
   number = {},
   pages = {},
